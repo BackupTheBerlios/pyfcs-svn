@@ -1,8 +1,8 @@
 #reload(analysis)
 import analysis
 from scipy import optimize
-from scipy.integrate import simps
-from numpy import ones, zeros, arange, diff, log
+from scipy.integrate import simps, trapz
+from numpy import ones, zeros, arange, diff, log, array
 import pylab as p
 
 class Distri:
@@ -28,15 +28,13 @@ class Distri:
         #Lagrangeparamter aus Fitparameter oder Paramterliste
         c = c.tolist()
         laa = [] 
-        for i in range(len(lagr)):
+        for i in range(len(fixl)):
             if fixl[i]:
                 laa.append(lagr[i])
             else:
                 laa.append(c.pop())
         lam = laa[0]
         lar = laa[1]
-        print lar
-        print lam
         c = array(c)
         #Berechnen von Normierungskonstante und Delta tauD
         t1 = min(tau)
@@ -56,7 +54,7 @@ class Distri:
             g1 = g_meas - self.gfunc(c, tauD, tau)
             g2 = self.gsfunc(1, tauD[i], tau)
             gi = -2./gSD**2 * g1 *g2
-            a1 = norm * simps(gi, self.tau)
+            a1 = norm * trapz(gi, self.tau)
             a2 = 2.*lam*(sum(c)/self.Part**2-1./self.Part)
             a3 = 2.*lar/dtD**4*(c[i-2]-4*c[i-1]+6*c[i]-4*c[i+1]+c[i+2]) #okay
             res = a1+a2+a3
@@ -71,7 +69,7 @@ class Distri:
         return ret
         
     def optimize(self, tauDmin, tauDmax, M, lagr=[0.0, 0.0], fixl=[True, True]):
-        c0 = self.Part/M * ones(M)
+        c0 = zeros(M)
         #Lagrange Parameter an Parameterliste anhaengen
         c0 = c0.tolist()
         for i in range(len(lagr)):
@@ -81,14 +79,23 @@ class Distri:
         #TauD Werte fuer Histogramm erstellen
         tauD = arange(tauDmin, tauDmax, (tauDmax-tauDmin)/M)
         self.tauD = tauD
-        print len(c0)
+        #print len(c0)
         #Fitten mit Leastsquare fit
         self.fit, self.err = optimize.leastsq(self.minfunc, c0[:], args=(lagr, fixl, tauD, self.tau, self.g_meas, self.gSD))
+        #Aufspalten der gefitteten Parameter in Lagrange-Parameter und c-Werte
+        self.lagrange = []
+        fit = self.fit.tolist()
+        for i in range(len(fixl)):
+            if fixl[i]:
+                self.lagrange.append(lagr[i])
+            else:
+                self.lagrange.append(fit.pop())
+        self.c = fit
 
 
 #lam = 0.3
 #lar = 1e-9
-#autocor = analysis.AnalyseFCS("100.58nM_5.fcs", "fcs", 1e-5, 0.009)
+autocor = analysis.AnalyseFCS("/media/disk/FCS/Data/Calib/100.58nM_5.fcs", "fcs", 1e-5, 0.009)
 #corf = analysis.Corrfit(autocor.tau, autocor.g, autocor.SD, 1, 1)
 #p = [s, Number of Particles, Fractions in Triplet state, Tiplet-states lifetimes, Diffusion times, Fractions, alpha]
 #p0 = [1.5, 14., 0.1, 1e-6, 1e-3, 1., 1.]
@@ -96,10 +103,10 @@ class Distri:
 #fv = [0, 1, 0, 0, 0, 1, 1]
 #corf.optimize(p0, fv)
 #corf.plotautocorr()
-distrf = Distri(autocor.tau, autocor.g, 1., 6.4)
-distrf.optimize(0.015e-3, 0.5e-3, 30, [.3, 1e-9], [True, False])#0.3 = lam, 1e-9 = lar
+distrf = Distri(autocor.tau, autocor.g, 1., 9.4)
+distrf.optimize(0.0002, 0.5e-3, 20, [.0, 0.], [True, True])#0.3 = lam, 1e-9 = lar
 #p.plot(log(autocor.tau), autocor.g)
-p.plot(distrf.tauD, distrf.fit)
+p.plot(distrf.tauD, distrf.c)
 print distrf.err
-#p.show()
+p.show()
 #print distrf.err
