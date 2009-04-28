@@ -7,12 +7,12 @@ import pylab as p
 
 class Distri:
     
-    def __init__(self, tau, g_meas, gSD, s):
+    def __init__(self, N, NSD, s, tau, g_meas, gSD):
         self.tau = tau
         self.g_meas = g_meas
         self.gSD = gSD
         self.s = s
-        self.Part = 1./self.g_meas[0]
+        self.N = N
 
     def gsfunc(self, c, tauD, tau):
         return c*(1.+tau/tauD)**-1. * (1.+tau/(self.s**2.*tauD))
@@ -54,8 +54,8 @@ class Distri:
             g1 = g_meas - self.gfunc(c, tauD, tau)
             g2 = self.gsfunc(1, tauD[i], tau)
             gi = -2./gSD**2 * g1 *g2
-            a1 = norm * trapz(gi, self.tau)
-            a2 = 2.*lam*(sum(c)/self.Part**2-1./self.Part)
+            a1 = norm * simps(gi, self.tau)
+            a2 = 2.*lam*(sum(c)/self.N**2-1./self.N)
             a3 = 2.*lar/dtD**4*(c[i-2]-4*c[i-1]+6*c[i]-4*c[i+1]+c[i+2]) #okay
             res = a1+a2+a3
             ret.append(res)
@@ -69,7 +69,7 @@ class Distri:
         return ret
         
     def optimize(self, tauDmin, tauDmax, M, lagr=[0.0, 0.0], fixl=[True, True]):
-        c0 = zeros(M)
+        c0 = self.N/M*ones(M)
         #Lagrange Parameter an Parameterliste anhaengen
         c0 = c0.tolist()
         for i in range(len(lagr)):
@@ -95,7 +95,7 @@ class Distri:
 
 #lam = 0.3
 #lar = 1e-9
-autocor = analysis.AnalyseFCS("/media/disk/FCS/Data/Calib/100.58nM_5.fcs", "fcs", 1e-5, 0.009)
+autocor = analysis.AnalyseFCS("/home/thomas/100.58nM_1.fcs", "fcs", 1e-5, 0.01)
 #corf = analysis.Corrfit(autocor.tau, autocor.g, autocor.SD, 1, 1)
 #p = [s, Number of Particles, Fractions in Triplet state, Tiplet-states lifetimes, Diffusion times, Fractions, alpha]
 #p0 = [1.5, 14., 0.1, 1e-6, 1e-3, 1., 1.]
@@ -103,8 +103,8 @@ autocor = analysis.AnalyseFCS("/media/disk/FCS/Data/Calib/100.58nM_5.fcs", "fcs"
 #fv = [0, 1, 0, 0, 0, 1, 1]
 #corf.optimize(p0, fv)
 #corf.plotautocorr()
-distrf = Distri(autocor.tau, autocor.g, 1., 9.4)
-distrf.optimize(0.0002, 0.5e-3, 20, [.0, 0.], [True, True])#0.3 = lam, 1e-9 = lar
+distrf = Distri(3.64, 0.5, 9.5, autocor.tau, autocor.g, autocor.gSD) #N, NSD, s, tau, g, gSD
+distrf.optimize(0.01e-3, 0.4e-3, 30, [.36, 1.e-5], [True, False])#0.3 = lam, 1e-9 = lar
 #p.plot(log(autocor.tau), autocor.g)
 p.plot(distrf.tauD, distrf.c)
 print distrf.err
