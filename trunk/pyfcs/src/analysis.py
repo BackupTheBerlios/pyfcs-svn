@@ -9,7 +9,7 @@ from numpy import *
 
 class AnalyseFCS:
   def __init__(self, filename="", type="fcs", dtau=1e-4, taumax=0.002):
-    self.SD = 1
+    self.gSD = 1
     if filename <> "":
       if type == "fcs":
         self.openrawfcs(filename)
