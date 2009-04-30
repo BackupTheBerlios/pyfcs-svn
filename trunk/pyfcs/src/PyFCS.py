@@ -2,7 +2,7 @@
 import analysis
 from scipy import optimize
 from scipy.integrate import simps, trapz
-from numpy import exp, log, ones, zeros, arange, diff, array
+from numpy import abs, exp, log, ones, zeros, arange, diff, array
 import pylab as plb
 from pylab import figure, show
 
@@ -34,6 +34,15 @@ class Distri:
                 p=array(p)
             lt = self.lifetime
             beta = self.beta
+            #Constrain alpha to positive numbers by cheating the optimizer
+            amax = 5.0
+            amin = 0.0
+            #am = amin + 0.5*(amax-amin)
+            #d = (amax-amin)/2
+            #c = (2.0*am-d)/2.0 - sqrt((2.0*am-d)**2/2.0-a**2) #This is approximately one
+            c = 1.0
+            #alpha = amin +  alpha**2/(abs(alpha+c))
+            alpha = (amin+amax)/2.0+(amax-amin)/2.0*alpha/(abs(alpha+c))
             #Derivation of L with respect to pi
             dL = []
             for tauDj in self.tauD:
@@ -52,7 +61,7 @@ class Distri:
             else:
                 ret = dQ
             return ret
-          
+               
         tauD = arange(tauDmin, tauDmax, (tauDmax-tauDmin)/M)
         self.tauD = tauD
         p0 = ones(len(tauD))*self.N/M
@@ -80,6 +89,10 @@ class Distri:
     
         def minfunc(c, lagr, fixl, tauD, tau, g_meas, gSD):
             ret = []
+            #Randbedingung c[i] muss groesser 0 sein
+            cmin = 0.0
+            cmax = 10.0
+            c = 0.5*(cmin+cmax)+0.5*(cmax-cmin)*c/abs(c+1.0)          
             #Lagrangeparamter aus Fitparameter oder Paramterliste
             c = c.tolist()
             laa = [] 
@@ -95,12 +108,7 @@ class Distri:
             t1 = min(tau)
             t2 = max(tau)
             norm = 1./(t2-t1)
-            dtD = tauD[1]-tauD[0]
-            #Randbedingung c[i] muss groesser 0 sein
-            for i in range(len(c)):
-                if c[i]<0:
-                    c[i]=0
-            res = 0
+            dtD = tauD[1]-tauD[0]        
             #Durchlaufen von c-Vektor, Enden werden nicht beruecksichtig wg. Ableitung
             for i in range(2, len(c)-2, 1):
                 #Berechung von Vektor fuer Integration
@@ -134,8 +142,8 @@ class Distri:
                     ret.append(laa[i])
             return ret
     
-        #c0 = self.N/M*ones(M)
-        c0 = zeros(M)
+        c0 = self.N/M*ones(M)
+        #c0 = zeros(M)
         #Append Lagrange parameters to parameter list for leastsq-fit 
         c0 = c0.tolist()
         for i in range(len(lagr)):
@@ -169,13 +177,17 @@ autocor = analysis.AnalyseFCS("C:\\temp\\C1-2.fcs", "fcs", 1e-5, 0.002)
 #fv = [0, 1, 0, 0, 0, 1, 1]
 #corf.optimize(p0, fv)
 #corf.plotautocorr()
-distrf = Distri(0.16, 0.05, 8.8, autocor.tau, autocor.g, autocor.gSD) #N, NSD, s, tau, g, gSD, beta, lifetime
-#distrf.starchev(1.e-6, 20.4e-6, 30, [1.e-9, 1.e-9], [False, False])#Nr.0 = lam, Nr. 1 = lar
-distrf.maxent(1.e-5, 6.0e-5, 30, 1.0, False)
-print 'Fit successful: %i' % distrf.err
+distrf = Distri(0.299, 0.05, 11.6, autocor.tau, autocor.g, autocor.gSD) #N, NSD, s, tau, g, gSD, beta, lifetime
+######### Histogram Fitting #######################
+distrf.maxent(1.e-6, 40.0e-6, 30, 1.0, False)
 print 'alpha: %s' % distrf.alpha
+
+#distrf.starchev(1.e-6, 20.4e-6, 30, [1.e-9, 1.e-9], [False, False])#Nr.0 = lam, Nr. 1 = lar
 #print 'Lambda-R: %s' % distrf.lagrange[1]
 #print 'Lambda-M: %s' % distrf.lagrange[0]
+#print 'Fit successful: %i' % distrf.err
+
+######### Curve Fitting ##########################
 #print distrf.err
 plb.plot(distrf.tauD, distrf.c)
 plb.show()
