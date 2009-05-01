@@ -5,6 +5,7 @@ from scipy.integrate import simps, trapz
 from numpy import abs, exp, log, ones, zeros, arange, diff, array
 import pylab as plb
 from pylab import figure, show
+from scipy import odr as O
 
 class Distri:
     
@@ -13,8 +14,55 @@ class Distri:
         self.g_meas, self.gSD = g_meas, gSD
         self.s, self.N, self.NSD = s, N, NSD
         self.beta, self.lifetime = beta, lifetime
+    
+    def maxent2(self, tauDmin, tauDmax, M):
 
-    def maxent(self, tauDmin, tauDmax, M, alpha, falpha):
+        def gfunc(tau, tauDi):
+            res = (1.0+tau/tauDi)**-1.0 * (1+tau/(tauDi*self.s**2))**-0.5
+            return res
+        
+        def gint(tau, p): #array(), float -> integriert ueber tauD
+            tauD = self.tauD
+            gD = gfunc(tau, tauD)
+            tripl = (1.0 + self.beta*exp(-1./self.lifetime*tau))
+            integ = simps(p * gD, tauD)
+            return tripl * integ
+         
+        def odrfunc(p):
+            tauDg = self.tauD
+            tau = self.tau
+            gSD = self.gSD
+            g_meas = self.g_meas
+            p = p.tolist()
+            alpha = p.pop()
+            rho = array(p)
+            S = -sum(rho*log(rho))
+            L = 0.0
+            for i in xrange(len(tau)):
+                L += gSD[i]**-2 * (gint(tau[i], rho)-g_meas[i])**2
+            L = self.N * L
+            mQ = L - alpha*S 
+            return mQ
+      
+        tauD = arange(tauDmin, tauDmax, (tauDmax-tauDmin)/M)
+        self.tauD = tauD
+        p0 = ones(len(tauD))*self.N/M
+        p0 = p0.tolist()
+        alpha = 0.1
+        p0.append(alpha)
+        fit, err = optimize.fmin_bfgs(odrfunc, p0, gtol=0.001)
+        #fit, err = optimize.fmin_cg(odrfunc, p0)
+        #ranges = []
+        #for po in p0:
+        #    ranges.append((0.0,10.0))
+        #fit = optimize.brute(odrfunc, ranges=ranges, Ns=20)
+        self.fit = self.fit.tolist()
+        self.alpha = self.fit.pop()
+        self.c = self.fit
+        return False
+
+
+    def maxent1(self, tauDmin, tauDmax, M, alpha, falpha):
         
         def gfunc(tau, tauDi):
             res = (1.0+tau/tauDi)**-1.0 * (1+tau/(tauDi*self.s**2))**-0.5
@@ -24,9 +72,9 @@ class Distri:
             tauD = self.tauD
             gD = gfunc(tau, tauD)
             tripl = (1.0 + self.beta*exp(-1./self.lifetime*tau))
-            integ = simps(p * gD)
-            return 1.0/self.N * tripl * integ
-        
+            integ = simps(p * gD, tauD)
+            return tripl * integ
+                
         def minfunc(p, alpha, falpha, tau, g_meas, gSD):
             if not falpha:
                 p = p.tolist()
@@ -67,7 +115,7 @@ class Distri:
         p0 = ones(len(tauD))*self.N/M
         p0 = p0.tolist()
         p0.append(alpha)
-        self.fit, self.err = optimize.leastsq(minfunc, p0[:], args=(alpha, falpha, self.tau, self.g_meas, self.gSD), xtol=1e-3)
+        self.fit, self.err = optimize.leastsq(minfunc, p0[:], args=(alpha, falpha, self.tau, self.g_meas, self.gSD), xtol=0.01)
         self.fit = self.fit.tolist()
         self.alpha = self.fit.pop()
         self.c = self.fit
@@ -90,9 +138,9 @@ class Distri:
         def minfunc(c, lagr, fixl, tauD, tau, g_meas, gSD):
             ret = []
             #Randbedingung c[i] muss groesser 0 sein
-            cmin = 0.0
-            cmax = 10.0
-            c = 0.5*(cmin+cmax)+0.5*(cmax-cmin)*c/abs(c+1.0)          
+            #cmin = 0.0
+            #cmax = 10.0
+            #c = 0.5*(cmin+cmax)+0.5*(cmax-cmin)*c/abs(c+1.0)          
             #Lagrangeparamter aus Fitparameter oder Paramterliste
             c = c.tolist()
             laa = [] 
@@ -177,10 +225,11 @@ autocor = analysis.AnalyseFCS("C:\\temp\\C1-2.fcs", "fcs", 1e-5, 0.002)
 #fv = [0, 1, 0, 0, 0, 1, 1]
 #corf.optimize(p0, fv)
 #corf.plotautocorr()
-distrf = Distri(0.299, 0.05, 11.6, autocor.tau, autocor.g, autocor.gSD) #N, NSD, s, tau, g, gSD, beta, lifetime
+distrf = Distri(2.27, 0.05, 13.9, autocor.tau, autocor.g, autocor.gSD) #N, NSD, s, tau, g, gSD, beta, lifetime
 ######### Histogram Fitting #######################
-distrf.maxent(1.e-6, 40.0e-6, 30, 1.0, False)
-print 'alpha: %s' % distrf.alpha
+#distrf.maxent1(1.e-6, 20.0e-6, 30, 1.0, False)
+distrf.maxent2(1.e-6, 5.0e-3, 30)
+#print 'alpha: %s' % distrf.alpha
 
 #distrf.starchev(1.e-6, 20.4e-6, 30, [1.e-9, 1.e-9], [False, False])#Nr.0 = lam, Nr. 1 = lar
 #print 'Lambda-R: %s' % distrf.lagrange[1]
